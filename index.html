@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Declaração de Matrícula</title>
+    <!-- Bibliotecas para gerar PDF a partir do HTML -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        /* Estilos gerais da página */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            gap: 30px;
+        }
+
+        /* Container principal */
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            width: 100%;
+            max-width: 1200px;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        /* --- ESTILOS DO FORMULÁRIO --- */
+        .form-container {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 380px;
+            flex-shrink: 0;
+            box-sizing: border-box;
+        }
+        .form-container h2 {
+            margin-top: 0;
+            text-align: center;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .download-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px;
+            background-color: #003366;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 20px;
+        }
+        .download-button:hover {
+            background-color: #002244;
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #003366;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: none; /* Escondido por padrão */
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* --- ESTILOS DA PRÉ-VISUALIZAÇÃO --- */
+        .preview-container {
+            text-align: center;
+        }
+        .preview-thumbnail {
+            width: 210px; /* Proporcional a A4 */
+            height: 297px;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            cursor: pointer;
+            overflow: hidden;
+            background-color: #fff;
+        }
+        .preview-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: top;
+        }
+        .preview-container p {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+        
+        /* --- ESTILOS DO MODAL (POP-UP) --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none; /* Começa escondido */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .modal-content {
+            background: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: auto;
+            position: relative; /* Necessário para posicionar o botão de fechar */
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: transparent;
+            border: none;
+            font-size: 28px;
+            font-weight: bold;
+            color: #555;
+            cursor: pointer;
+        }
+
+        /* --- ESTILOS DA DECLARAÇÃO (CONTEÚDO REAL) --- */
+        .declaration-content {
+            font-family: 'Times New Roman', Times, serif;
+            color: #000;
+            width: 210mm;
+            min-height: 297mm;
+            padding: 1.5cm 2cm; /* Margem superior/inferior 1.5cm, laterais 2cm */
+            box-sizing: border-box;
+            background-color: #fff;
+            display: flex;
+            flex-direction: column;
+        }
+        .header { text-align: center; margin-bottom: 40px; }
+        .header img { width: 150px; margin-bottom: 10px; }
+        .header p { margin: 2px 0; font-size: 12px; }
+        .title { font-size: 16px; font-weight: bold; text-transform: uppercase; margin-top: 20px; }
+        .declaration-body p { font-size: 14px; line-height: 1.6; text-align: justify; }
+        .disciplinas-table { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 12px; }
+        .disciplinas-table th, .disciplinas-table td { border: 1px solid #000; padding: 5px; text-align: left; }
+        .disciplinas-table th { background-color: #f2f2f2; }
+        /* Classe para centralizar colunas */
+        .disciplinas-table .col-center {
+            text-align: center;
+        }
+        
+        /* Seção de autenticação com tabela */
+        .auth-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #000;
+            margin-top: 40px;
+            text-align: center;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+        .auth-table td {
+            padding: 15px;
+            width: 100%;
+        }
+        .auth-table p {
+            margin: 8px 0;
+        }
+        /* Estilo para o título dentro da caixa de autenticação */
+        .auth-title {
+            font-size: 13px;
+        }
+        .auth-code { 
+            font-weight: bold; 
+            font-family: 'Courier New', Courier, monospace; 
+        }
+        .address-footer {
+            margin-top: auto; /* Empurra para o final da página */
+            padding-top: 20px;
+            text-align: center;
+            font-size: 11px;
+            color: #555;
+            border-top: 1px solid #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Formulário para entrada de dados -->
+        <div class="form-container">
+            <h2>Gerar Declaração</h2>
+            <div class="form-group">
+                <label for="inputNome">Nome Completo do Aluno</label>
+                <input type="text" id="inputNome" placeholder="Escreva o nome aqui">
+            </div>
+            <div class="form-group">
+                <label for="inputCPF">CPF</label>
+                <input type="text" id="inputCPF" placeholder="000.000.000-00" maxlength="14">
+            </div>
+            <div class="form-group">
+                <label for="inputMatricula">Nº de Matrícula</label>
+                <input type="text" id="inputMatricula" placeholder="0000000-0" maxlength="9">
+            </div>
+            <div class="form-group">
+                <label for="selectCurso">Curso</label>
+                <select id="selectCurso">
+                    <option value="MBA em Gestão de projetos">MBA em Gestão de projetos</option>
+                    <option value="Direito">Direito</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="inputPeriodo">Período Atual do Curso</label>
+                <input type="number" id="inputPeriodo" min="1" value="1">
+            </div>
+            <button class="download-button" id="downloadButton">
+                <span id="btn-text">Baixar Declaração (PDF)</span>
+                <div class="loader" id="loader"></div>
+            </button>
+        </div>
+
+        <!-- Pré-visualização pequena e clicável -->
+        <div class="preview-container">
+            <div class="preview-thumbnail" id="previewThumbnail">
+                <img id="thumbnailImage" src="" alt="Pré-visualização da Declaração">
+            </div>
+            <p>Clique na imagem para ampliar</p>
+        </div>
+    </div>
+
+    <!-- Modal para visualização em tela cheia -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="modalCloseBtn">&times;</button>
+            <div id="modalBody">
+                <!-- O conteúdo da declaração será clonado aqui -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Conteúdo da declaração (fica fora da tela, usado para geração) -->
+    <div style="position: absolute; left: -9999px; top: 0;">
+        <div class="declaration-content" id="declarationContent">
+            <div class="header">
+                <img id="logoImage" alt="Logo FGV">
+                <p>FUNDAÇÃO GETÚLIO VARGAS</p>
+                <p>Reconhecida pelo Decreto nº 45.046, de 12 de dezembro de 1958</p>
+                <p class="title">DECLARAÇÃO DE MATRÍCULA</p>
+            </div>
+            <div class="declaration-body">
+                <p>Declaramos que <strong id="previewNomeAluno">Nome do Aluno</strong>, CPF <strong id="previewCPF">000.000.000-00</strong>, com matrícula <strong id="previewMatricula">0000000-0</strong>, é aluno(a) do curso de <strong id="previewCurso">Nome do Curso</strong>, da Fundação Getúlio Vargas, regularmente matriculado(a) e frequente no <strong id="previewSemestreLetivo">1º</strong> Semestre Letivo de <strong id="previewAnoLetivo">2025</strong> na(s) seguinte(s) disciplina(s):</p>
+            </div>
+            <table class="disciplinas-table">
+                <thead>
+                    <tr>
+                        <th>Disciplinas</th>
+                        <th class="col-center">Período</th>
+                        <th class="col-center">Carga Horária</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>CULTURA RELIGIOSA I</td>
+                        <td class="col-center periodo-cell">1º</td>
+                        <td class="col-center">70</td>
+                    </tr>
+                    <tr>
+                        <td>INTRODUÇÃO AO ESTUDO DA ADMINISTRAÇÃO</td>
+                        <td class="col-center periodo-cell">1º</td>
+                        <td class="col-center">76</td>
+                    </tr>
+                    <tr>
+                        <td>MERCADO DE CAPITAIS</td>
+                        <td class="col-center periodo-cell">1º</td>
+                        <td class="col-center">70</td>
+                    </tr>
+                    <tr>
+                        <td>RECURSOS HUMANOS I</td>
+                        <td class="col-center periodo-cell">1º</td>
+                        <td class="col-center">70</td>
+                    </tr>
+                    <tr>
+                        <td>DIREITOS HUMANOS E FUNDAMENTAIS</td>
+                        <td class="col-center periodo-cell">1º</td>
+                        <td class="col-center">38</td>
+                    </tr>
+                    <tr>
+                        <td>MARKETING E VENDAS</td>
+                        <td class="col-center periodo-cell">1º</td>
+                        <td class="col-center">70</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="declaration-body">
+                <p>Declaramos, ainda, que o(a) referido(a) aluno(a) ingressou nesta Universidade no <strong id="previewIngresso">1º semestre de 2023</strong>.</p>
+            </div>
+            <p style="text-align: center; margin-top: 40px;">Belo Horizonte, <span id="previewDataDocumento">15 de janeiro de 2025</span></p>
+            
+            <table class="auth-table">
+                <tbody>
+                    <tr>
+                        <td>
+                            <p><strong class="auth-title">Centro de Registros Acadêmicos</strong></p>
+                            <p>Declaração emitida via Internet através do Sistema de Gestão Acadêmica/Estágio em <strong id="previewDataEmissao">DD/MM/YYYY às HH:MM:SS</strong></p>
+                            <p>Para verificar a autenticidade do documento, acesse:<br>
+                            http://www.fgv.br/autenticardocumentos ou através do portal de estágios da FGV (www.estagio.fgv.br) no menu "Empresa", opção "Procedimentos", no link "Autenticação de Declaração de Matrícula".</p>
+                            <p><strong>Código de Autenticação</strong></p>
+                            <p class="auth-code" id="previewAuthCode">0000-XX00-000000-XXX-0000-XXX</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="address-footer">
+                Av. Olegário Maciel - Santo Agostinho, Belo Horizonte - MG, 30180-119<br>
+                Fone: (31) 3500-3700
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mapeamento dos elementos do DOM
+        const form = {
+            nome: document.getElementById('inputNome'),
+            cpf: document.getElementById('inputCPF'),
+            matricula: document.getElementById('inputMatricula'),
+            curso: document.getElementById('selectCurso'),
+            periodo: document.getElementById('inputPeriodo')
+        };
+        const preview = {
+            nome: document.getElementById('previewNomeAluno'),
+            cpf: document.getElementById('previewCPF'),
+            matricula: document.getElementById('previewMatricula'),
+            curso: document.getElementById('previewCurso'),
+            semestre: document.getElementById('previewSemestreLetivo'),
+            ano: document.getElementById('previewAnoLetivo'),
+            ingresso: document.getElementById('previewIngresso'),
+            dataDoc: document.getElementById('previewDataDocumento'),
+            dataEmissao: document.getElementById('previewDataEmissao'),
+            authCode: document.getElementById('previewAuthCode')
+        };
+        const downloadButton = document.getElementById('downloadButton');
+        const declarationContent = document.getElementById('declarationContent');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalBody = document.getElementById('modalBody');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
+        const previewThumbnail = document.getElementById('previewThumbnail');
+        const thumbnailImage = document.getElementById('thumbnailImage');
+        const loader = document.getElementById('loader');
+        const btnText = document.getElementById('btn-text');
+        
+        // --- DADOS DA IMAGEM E FUNÇÕES DE CÁLCULO ---
+
+        // A string Base64 da imagem é guardada aqui para não poluir o HTML
+        const fgvLogoBase64 = "data:image/png;base64,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";
+
+        const generateAuthCode = () => {
+            const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+            const randChar = () => String.fromCharCode(rand(65, 90));
+            return [rand(1000, 9999),`${randChar()}${randChar()}${rand(10,99)}`,rand(100000, 999999),`${randChar()}${randChar()}${randChar()}`,rand(1000, 9999),`${randChar()}${randChar()}${randChar()}`].join('-');
+        };
+
+        const calculateIngresso = (ano, semestre, periodo) => {
+            if (!periodo || periodo < 1) return "Não definido";
+            let anoIngresso = ano, semestreIngresso = semestre;
+            for (let i = 0; i < parseInt(periodo, 10) - 1; i++) {
+                if (semestreIngresso === 1) { semestreIngresso = 2; anoIngresso--; } 
+                else { semestreIngresso = 1; }
+            }
+            return `${semestreIngresso}º semestre de ${anoIngresso}`;
+        };
+
+        // --- FUNÇÃO PRINCIPAL DE ATUALIZAÇÃO ---
+        const updatePreview = async () => {
+            const hoje = new Date();
+            const anoAtual = hoje.getFullYear();
+            const mesAtual = hoje.getMonth();
+            const semestreNum = (mesAtual >= 0 && mesAtual <= 6) ? 1 : 2;
+
+            // Atualiza os textos principais
+            preview.nome.textContent = form.nome.value || "Nome do Aluno";
+            preview.cpf.textContent = form.cpf.value || "000.000.000-00";
+            preview.matricula.textContent = form.matricula.value || "0000000-0";
+            preview.curso.textContent = form.curso.value;
+            preview.semestre.textContent = `${semestreNum}º`;
+            preview.ano.textContent = anoAtual;
+            preview.ingresso.textContent = calculateIngresso(anoAtual, semestreNum, form.periodo.value);
+            preview.dataDoc.textContent = (semestreNum === 1) ? `15 de janeiro de ${anoAtual}` : `15 de agosto de ${anoAtual}`;
+            preview.dataEmissao.textContent = hoje.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
+
+            // Atualiza a coluna "Período" na tabela de disciplinas
+            const periodoValue = form.periodo.value || '1';
+            const periodoCells = declarationContent.querySelectorAll('.periodo-cell');
+            periodoCells.forEach(cell => {
+                cell.textContent = `${periodoValue}º`;
+            });
+
+            // Gera uma imagem da declaração para a miniatura
+            try {
+                // Garante que a imagem tenha o src antes de gerar o canvas
+                document.getElementById('logoImage').src = fgvLogoBase64;
+                const canvas = await html2canvas(declarationContent, { scale: 0.5 });
+                thumbnailImage.src = canvas.toDataURL('image/png');
+            } catch (error) {
+                console.error("Erro ao gerar a miniatura:", error);
+            }
+        };
+        
+        // --- MÁSCARAS DE FORMATAÇÃO ---
+        const formatCPF = (value) => {
+            return value.replace(/\D/g, '')
+                       .replace(/(\d{3})(\d)/, '$1.$2')
+                       .replace(/(\d{3})(\d)/, '$1.$2')
+                       .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+        };
+        const formatMatricula = (value) => {
+            return value.replace(/\D/g, '').replace(/(\d{7})(\d{1,2})$/, '$1-$2');
+        };
+
+        // --- EVENT LISTENERS ---
+        Object.values(form).forEach(el => el.addEventListener('input', updatePreview));
+        form.cpf.addEventListener('input', (e) => e.target.value = formatCPF(e.target.value));
+        form.matricula.addEventListener('input', (e) => e.target.value = formatMatricula(e.target.value));
+        
+        downloadButton.addEventListener('click', async () => {
+            loader.style.display = 'inline-block';
+            btnText.textContent = 'Gerando...';
+            downloadButton.disabled = true;
+
+            try {
+                const { jsPDF } = window.jspdf;
+                // Garante que a imagem tenha o src antes de gerar o PDF
+                document.getElementById('logoImage').src = fgvLogoBase64;
+                const canvas = await html2canvas(declarationContent, { scale: 2, useCORS: true }); // Aumenta a escala e habilita CORS
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                
+                const nomeArquivo = `Declaracao-Matricula-${(form.nome.value || 'aluno').replace(/ /g, '_')}.pdf`;
+                pdf.save(nomeArquivo);
+
+            } catch (error) {
+                console.error("Erro ao gerar o PDF:", error);
+                alert("Ocorreu um erro ao gerar o PDF. Tente novamente.");
+            } finally {
+                loader.style.display = 'none';
+                btnText.textContent = 'Baixar Declaração (PDF)';
+                downloadButton.disabled = false;
+            }
+        });
+
+        // Funcionalidade do Modal
+        const closeModal = () => {
+            modalOverlay.style.display = 'none';
+        };
+
+        previewThumbnail.addEventListener('click', () => {
+            modalBody.innerHTML = ''; // Limpa conteúdo anterior
+            const clone = declarationContent.cloneNode(true);
+            // Garante que a imagem no modal também tenha o src correto
+            clone.querySelector('#logoImage').src = fgvLogoBase64;
+            modalBody.appendChild(clone);
+            modalOverlay.style.display = 'flex';
+        });
+        modalCloseBtn.addEventListener('click', closeModal);
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) { // Fecha apenas se clicar no fundo
+                closeModal();
+            }
+        });
+
+        // --- INICIALIZAÇÃO ---
+        document.getElementById('logoImage').src = fgvLogoBase64; // Carrega a imagem no elemento oculto
+        preview.authCode.textContent = generateAuthCode();
+        updatePreview(); // Gera a primeira pré-visualização
+
+    </script>
+</body>
+</html>
